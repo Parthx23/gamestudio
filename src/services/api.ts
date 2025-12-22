@@ -43,18 +43,7 @@ class ApiService {
   }
 
   async generateAIGame(prompt: string) {
-    try {
-      console.log('API call to generate AI game:', prompt);
-      const response = await this.request('/games/generate', {
-        method: 'POST',
-        body: JSON.stringify({ prompt })
-      });
-      console.log('API response:', response);
-      return response;
-    } catch (error) {
-      console.error('API error:', error);
-      throw error;
-    }
+    throw new Error('AI generation has been disabled');
   }
 
   async getUserGames() {

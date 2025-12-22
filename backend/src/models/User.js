@@ -7,7 +7,11 @@ const userSchema = new mongoose.Schema({
   avatar: String,
   plan: { type: String, enum: ['free', 'pro', 'premium'], default: 'free' },
   gamesCreated: { type: Number, default: 0 },
-  aiCredits: { type: Number, default: 5 },
+  preferences: {
+    theme: { type: String, default: 'cosmic' },
+    soundEnabled: { type: Boolean, default: true },
+    particlesEnabled: { type: Boolean, default: true }
+  },
   stats: {
     gamesOwned: { type: Number, default: 0 },
     friends: { type: Number, default: 0 },

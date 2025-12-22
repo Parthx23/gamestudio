@@ -2,10 +2,37 @@ import { io, Socket } from 'socket.io-client';
 
 class SocketService {
   private socket: Socket | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
 
   connect() {
     if (!this.socket) {
-      this.socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001');
+      const url = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001';
+      this.socket = io(url, {
+        transports: ['websocket', 'polling'],
+        timeout: 20000,
+        forceNew: true
+      });
+
+      this.socket.on('connect', () => {
+        console.log('Socket connected:', this.socket?.id);
+        this.reconnectAttempts = 0;
+      });
+
+      this.socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+        if (reason === 'io server disconnect') {
+          this.socket?.connect();
+        }
+      });
+
+      this.socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        this.reconnectAttempts++;
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          console.error('Max reconnection attempts reached');
+        }
+      });
     }
     return this.socket;
   }
@@ -17,15 +44,15 @@ class SocketService {
     }
   }
 
-  joinRoom(roomId: string, userId: string) {
+  joinRoom(roomId: string, userId: string, userName: string) {
     if (this.socket) {
-      this.socket.emit('join-room', { roomId, userId });
+      this.socket.emit('join-room', { roomId, userId, userName });
     }
   }
 
-  sendPlayerMove(roomId: string, position: any, rotation: any) {
+  sendPlayerMove(roomId: string, position: any, rotation: any, velocity?: any) {
     if (this.socket) {
-      this.socket.emit('player-move', { roomId, position, rotation });
+      this.socket.emit('player-move', { roomId, position, rotation, velocity });
     }
   }
 
@@ -35,28 +62,47 @@ class SocketService {
     }
   }
 
-  // WebRTC signaling
-  sendOffer(roomId: string, offer: RTCSessionDescriptionInit) {
+  sendChatMessage(roomId: string, message: string, userName: string) {
     if (this.socket) {
-      this.socket.emit('offer', { roomId, offer });
+      this.socket.emit('chat-message', { roomId, message, userName });
     }
   }
 
-  sendAnswer(roomId: string, answer: RTCSessionDescriptionInit) {
+  startGame(roomId: string) {
     if (this.socket) {
-      this.socket.emit('answer', { roomId, answer });
+      this.socket.emit('game-start', { roomId });
     }
   }
 
-  sendIceCandidate(roomId: string, candidate: RTCIceCandidate) {
+  // Enhanced WebRTC signaling
+  sendOffer(roomId: string, offer: RTCSessionDescriptionInit, targetId?: string) {
     if (this.socket) {
-      this.socket.emit('ice-candidate', { roomId, candidate });
+      this.socket.emit('offer', { roomId, offer, targetId });
     }
   }
 
+  sendAnswer(roomId: string, answer: RTCSessionDescriptionInit, targetId?: string) {
+    if (this.socket) {
+      this.socket.emit('answer', { roomId, answer, targetId });
+    }
+  }
+
+  sendIceCandidate(roomId: string, candidate: RTCIceCandidate, targetId?: string) {
+    if (this.socket) {
+      this.socket.emit('ice-candidate', { roomId, candidate, targetId });
+    }
+  }
+
+  // Event listeners
   onPlayerJoined(callback: (data: any) => void) {
     if (this.socket) {
       this.socket.on('player-joined', callback);
+    }
+  }
+
+  onPlayerLeft(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('player-left', callback);
     }
   }
 
@@ -69,6 +115,24 @@ class SocketService {
   onGameAction(callback: (data: any) => void) {
     if (this.socket) {
       this.socket.on('game-action', callback);
+    }
+  }
+
+  onChatMessage(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('chat-message', callback);
+    }
+  }
+
+  onGameStarted(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('game-started', callback);
+    }
+  }
+
+  onRoomJoined(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('room-joined', callback);
     }
   }
 
@@ -87,6 +151,18 @@ class SocketService {
   onIceCandidate(callback: (data: any) => void) {
     if (this.socket) {
       this.socket.on('ice-candidate', callback);
+    }
+  }
+
+  onError(callback: (error: string) => void) {
+    if (this.socket) {
+      this.socket.on('error', callback);
+    }
+  }
+
+  removeAllListeners() {
+    if (this.socket) {
+      this.socket.removeAllListeners();
     }
   }
 }

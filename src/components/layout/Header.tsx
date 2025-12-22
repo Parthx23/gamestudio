@@ -1,4 +1,5 @@
-import { Bell, Search, MessageSquare, LogIn, LogOut } from "lucide-react";
+import { Bell, Search, MessageSquare, LogIn, LogOut, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,6 +8,12 @@ import { toast } from "sonner";
 
 const Header = () => {
   const { user, loading, login, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleCreateWithAI = () => {
+    navigate('/');
+    // This will trigger the game builder in Dashboard
+  };
 
   if (loading) {
     return (
@@ -62,13 +69,58 @@ const Header = () => {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative">
+          {/* CREATE GAME Button */}
+          {(() => {
+            const credits = user?.aiCredits ?? 0;
+            const createLabel = credits > 0 ? "Create with AI" : "Create game";
+            return (
+              <button
+                onClick={handleCreateWithAI}
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-400 to-sky-500 px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg hover:from-emerald-300 hover:to-sky-400 transition"
+                title={credits > 0 ? `${credits} AI credits remaining` : "No AI credits left"}
+              >
+                <span className="text-base">+</span>
+                <span>{createLabel}</span>
+              </button>
+            );
+          })()}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="relative"
+            onClick={() => {
+              const messages = [
+                "🎮 Alex: Want to play racing game?",
+                "🏆 Sarah: Check out my new puzzle!", 
+                "⚡ Mike: Ready for battle royale?"
+              ];
+              messages.forEach((msg, i) => {
+                setTimeout(() => toast.success(msg), i * 1000);
+              });
+            }}
+          >
             <MessageSquare className="h-5 w-5" />
             <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-primary-foreground">
               3
             </span>
           </Button>
-          <Button variant="ghost" size="icon" className="relative">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="relative"
+            onClick={() => {
+              const notifications = [
+                "🎯 Achievement Unlocked: Game Creator!",
+                "👥 Friend Request from GameMaster99",
+                "🎮 Your game got 50+ plays!",
+                "⭐ New high score in Space Shooter!",
+                "🔥 Weekly challenge available!"
+              ];
+              notifications.forEach((notif, i) => {
+                setTimeout(() => toast.info(notif), i * 800);
+              });
+            }}
+          >
             <Bell className="h-5 w-5" />
             <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold flex items-center justify-center">
               5

@@ -2,6 +2,15 @@ import Game from '../models/Game.js';
 import User from '../models/User.js';
 import { generateGameConfig } from '../services/gameAI.js';
 
+// Add request logging
+const logRequest = (req, action) => {
+  console.log(`[${new Date().toISOString()}] ${action}:`, {
+    user: req.user?.email,
+    body: req.body,
+    params: req.params
+  });
+};
+
 export const createGame = async (req, res) => {
   try {
     const { title, description, config, isPublic } = req.body;
@@ -25,34 +34,66 @@ export const createGame = async (req, res) => {
 export const generateAIGame = async (req, res) => {
   try {
     console.log('AI generation request:', req.body);
+    console.log('User:', req.user?.email, 'Plan:', req.user?.plan, 'AI Credits:', req.user?.aiCredits);
+    
     const { prompt } = req.body;
     
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
+    if (!prompt || prompt.trim().length === 0) {
+      return res.status(400).json({ error: 'Prompt is required and cannot be empty' });
+    }
+    
+    if (prompt.length > 500) {
+      return res.status(400).json({ error: 'Prompt too long (max 500 characters)' });
     }
     
     console.log('Generating config for prompt:', prompt);
     const config = await generateGameConfig(prompt);
-    console.log('Generated config:', config);
+    console.log('Generated config:', JSON.stringify(config, null, 2));
+    
+    // Validate the generated config
+    if (!config || !config.title || !config.type) {
+      throw new Error('Invalid game configuration generated');
+    }
     
     const game = await Game.create({
       title: config.title,
-      description: `AI-generated game from prompt: "${prompt}"`,
+      description: config.description || `AI-generated ${config.type} game: ${prompt.substring(0, 100)}`,
       creator: req.user._id,
       config,
       isPublic: false
     });
     
-    console.log('Game created:', game._id);
+    console.log('Game created successfully:', game._id);
 
+    // Update user stats
     await User.findByIdAndUpdate(req.user._id, { 
       $inc: { gamesCreated: 1, aiCredits: -1 }
     });
     
-    res.status(201).json({ game });
+    console.log('User stats updated');
+    
+    res.status(201).json({ 
+      game,
+      message: 'Game generated successfully'
+    });
   } catch (error) {
-    console.error('AI generation error:', error);
-    res.status(400).json({ error: error.message });
+    console.error('AI generation error details:', {
+      message: error.message,
+      stack: error.stack,
+      prompt: req.body?.prompt
+    });
+    
+    // Return more specific error messages
+    let errorMessage = 'Failed to generate game';
+    if (error.message.includes('API key')) {
+      errorMessage = 'AI service temporarily unavailable';
+    } else if (error.message.includes('credits')) {
+      errorMessage = 'Insufficient AI credits';
+    } else if (error.message.includes('Invalid')) {
+      errorMessage = 'Could not generate valid game from prompt';
+    }
+    
+    res.status(400).json({ error: errorMessage });
   }
 };
 

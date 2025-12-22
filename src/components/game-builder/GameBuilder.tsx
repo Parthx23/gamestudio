@@ -1,4 +1,6 @@
 import { useState } from "react";
+import React from "react";
+import { MiniGameSelector } from "@/components/game/MiniGames";
 import { 
   Play, 
   Square, 
@@ -12,15 +14,21 @@ import {
   Layers,
   Settings2,
   Palette,
-  Sparkles
+  Car,
+  Zap,
+  Target,
+  Flag,
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { apiService } from "@/services/api";
 import { toast } from "sonner";
+import { Game3DGeneratorComponent } from "@/components/creative/Game3DGeneratorComponent";
 
 type Tool = "select" | "move" | "car" | "track" | "obstacle" | "powerup" | "platform" | "enemy" | "weapon" | "flag";
 type GameObject = {
@@ -43,10 +51,10 @@ const getToolsForGameType = (gameType: string) => {
   switch (gameType) {
     case "racing":
       return [...baseTools,
-        { id: "car" as Tool, icon: Square, label: "Car" },
+        { id: "car" as Tool, icon: Car, label: "Car" },
         { id: "track" as Tool, icon: Circle, label: "Track" },
-        { id: "obstacle" as Tool, icon: Triangle, label: "Obstacle" },
-        { id: "powerup" as Tool, icon: Sparkles, label: "Power-up" },
+        { id: "obstacle" as Tool, icon: Shield, label: "Barrier" },
+        { id: "powerup" as Tool, icon: Zap, label: "Speed Boost" },
       ];
     case "kart-smash":
       return [...baseTools,
@@ -56,15 +64,15 @@ const getToolsForGameType = (gameType: string) => {
       ];
     case "shooting":
       return [...baseTools,
-        { id: "platform" as Tool, icon: Square, label: "Platform" },
-        { id: "weapon" as Tool, icon: Triangle, label: "Weapon" },
-        { id: "enemy" as Tool, icon: Circle, label: "Spawn Point" },
+        { id: "platform" as Tool, icon: Square, label: "Cover" },
+        { id: "weapon" as Tool, icon: Target, label: "Gun" },
+        { id: "enemy" as Tool, icon: Circle, label: "Enemy Spawn" },
       ];
     case "capture-flag":
       return [...baseTools,
-        { id: "platform" as Tool, icon: Square, label: "Platform" },
-        { id: "flag" as Tool, icon: Triangle, label: "Flag" },
-        { id: "obstacle" as Tool, icon: Circle, label: "Cover" },
+        { id: "platform" as Tool, icon: Square, label: "Base" },
+        { id: "flag" as Tool, icon: Flag, label: "Flag" },
+        { id: "obstacle" as Tool, icon: Shield, label: "Wall" },
       ];
     default:
       return [...baseTools,
@@ -96,6 +104,8 @@ const GameBuilder = ({ gameType = "default" }: GameBuilderProps) => {
   const [objects, setObjects] = useState<GameObject[]>([]);
   const [selectedObject, setSelectedObject] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playerPosition, setPlayerPosition] = useState({ x: 100, y: 300 });
+  const [gameLoop, setGameLoop] = useState<NodeJS.Timeout | null>(null);
   
   const tools = getToolsForGameType(gameType);
 
@@ -118,6 +128,7 @@ const GameBuilder = ({ gameType = "default" }: GameBuilderProps) => {
     };
 
     setObjects([...objects, newObject]);
+    toast.success(`${activeTool} added to game!`);
   };
 
   const handleObjectClick = (e: React.MouseEvent, id: string) => {
@@ -134,49 +145,104 @@ const GameBuilder = ({ gameType = "default" }: GameBuilderProps) => {
     }
   };
 
-  const [aiPrompt, setAiPrompt] = useState("");
   const [gameTitle, setGameTitle] = useState("");
   const [gameDescription, setGameDescription] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const clearCanvas = () => {
     setObjects([]);
     setSelectedObject(null);
+    stopGame();
   };
 
-  const generateAIGame = async () => {
-    if (!aiPrompt.trim()) {
-      toast.error("Please enter a game description");
-      return;
-    }
-
-    setIsGenerating(true);
-    try {
-      const response = await apiService.generateAIGame(aiPrompt);
-      const game = response.game;
-      
-      const newObjects = game.config.objects?.map((obj: any) => ({
-        id: obj.id,
-        type: obj.type,
-        x: (obj.position?.x || 0) * 10 + 200,
-        y: (obj.position?.z || 0) * 10 + 200,
-        width: obj.type === 'car' ? 80 : obj.type === 'track' ? 200 : (obj.scale?.x || 1) * 50,
-        height: obj.type === 'car' ? 40 : obj.type === 'track' ? 200 : (obj.scale?.z || 1) * 50,
-        color: obj.properties?.color || activeColor,
-        gameType: game.config.type
-      })) || [];
-      
-      setObjects(newObjects);
-      setGameTitle(game.title);
-      setGameDescription(game.description);
-      toast.success("AI game generated successfully!");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to generate game");
-    } finally {
-      setIsGenerating(false);
+  const startGame = () => {
+    setIsPlaying(true);
+    setPlayerPosition({ x: 100, y: 300 });
+    
+    const loop = setInterval(() => {
+      // Simple physics simulation
+      setPlayerPosition(prev => {
+        let newX = prev.x;
+        let newY = prev.y;
+        
+        // Apply gravity for platformer games
+        if (gameType === 'platformer' || gameType === 'default') {
+          newY += 2; // gravity
+          
+          // Check platform collisions
+          objects.forEach(obj => {
+            if (obj.type === 'platform' && 
+                newX < obj.x + obj.width && newX + 50 > obj.x &&
+                newY < obj.y + obj.height && newY + 50 > obj.y) {
+              newY = obj.y - 50; // Land on platform
+            }
+          });
+          
+          // Floor collision
+          if (newY > 350) newY = 350;
+        }
+        
+        return { x: newX, y: newY };
+      });
+    }, 50);
+    
+    setGameLoop(loop);
+  };
+  
+  const stopGame = () => {
+    setIsPlaying(false);
+    if (gameLoop) {
+      clearInterval(gameLoop);
+      setGameLoop(null);
     }
   };
+  
+  const handleKeyPress = (e: KeyboardEvent) => {
+    if (!isPlaying) return;
+    
+    e.preventDefault();
+    
+    setPlayerPosition(prev => {
+      let newX = prev.x;
+      let newY = prev.y;
+      
+      switch(e.key) {
+        case 'ArrowLeft':
+        case 'a':
+          newX = Math.max(0, prev.x - 10);
+          break;
+        case 'ArrowRight':
+        case 'd':
+          newX = Math.min(750, prev.x + 10);
+          break;
+        case 'ArrowUp':
+        case 'w':
+        case ' ':
+          if (gameType === 'platformer' || gameType === 'default') {
+            newY = Math.max(0, prev.y - 30); // Jump
+          } else {
+            newY = Math.max(0, prev.y - 10);
+          }
+          break;
+        case 'ArrowDown':
+        case 's':
+          newY = Math.min(350, prev.y + 10);
+          break;
+      }
+      
+      return { x: newX, y: newY };
+    });
+  };
+  
+  // Add keyboard event listeners
+  React.useEffect(() => {
+    if (isPlaying) {
+      window.addEventListener('keydown', handleKeyPress);
+      return () => window.removeEventListener('keydown', handleKeyPress);
+    }
+  }, [isPlaying, gameType]);
+
+
 
   const saveGame = async () => {
     if (!gameTitle.trim()) {
@@ -187,26 +253,26 @@ const GameBuilder = ({ gameType = "default" }: GameBuilderProps) => {
     setIsSaving(true);
     try {
       const gameConfig = {
-        type: "platformer",
+        type: gameType || "platformer",
         maxPlayers: 4,
         objects: objects.map(obj => ({
           id: obj.id,
-          type: obj.type === 'rectangle' ? 'block' : obj.type === 'circle' ? 'platform' : 'block',
-          position: { x: (obj.x - 200) / 10, y: 0, z: (obj.y - 200) / 10 },
+          type: obj.type,
+          position: { x: obj.x, y: 0, z: obj.y },
           rotation: { x: 0, y: 0, z: 0 },
-          scale: { x: obj.width / 50, y: 1, z: obj.height / 50 },
+          scale: { x: obj.width, y: 1, z: obj.height },
           properties: { color: obj.color }
         })),
         settings: {
-          gravity: 9.8,
+          gravity: gameType === "racing" ? 5 : 9.8,
           lighting: "dynamic",
-          environment: "city"
+          environment: gameType === "racing" ? "track" : "arena"
         }
       };
 
       await apiService.createGame({
         title: gameTitle,
-        description: gameDescription,
+        description: gameDescription || `A ${gameType} game created with the visual builder`,
         config: gameConfig,
         isPublic: false
       });
@@ -298,47 +364,28 @@ const GameBuilder = ({ gameType = "default" }: GameBuilderProps) => {
 
   return (
     <div className="rounded-2xl bg-card border border-border overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Layers className="h-5 w-5 text-primary" />
-          <h3 className="font-gaming font-semibold">
-            {gameType === "racing" ? "Racing Game" : 
-             gameType === "kart-smash" ? "Kart Smash" :
-             gameType === "shooting" ? "Shooter" :
-             gameType === "capture-flag" ? "Capture Flag" :
-             "Game"} Builder
-          </h3>
+      <Tabs defaultValue="builder" className="w-full">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary" />
+            <h3 className="font-gaming font-semibold">
+              {gameType === "racing" ? "Racing Game" : 
+               gameType === "kart-smash" ? "Kart Smash" :
+               gameType === "shooting" ? "Shooter" :
+               gameType === "capture-flag" ? "Capture Flag" :
+               "Game"} Builder
+            </h3>
+          </div>
+          <TabsList>
+            <TabsTrigger value="builder">2D Builder</TabsTrigger>
+            <TabsTrigger value="3d-generator">3D Generator</TabsTrigger>
+          </TabsList>
         </div>
-        <div className="flex items-center gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="neon" size="sm">
-                <Sparkles className="h-4 w-4 mr-1" />
-                AI Generate
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Generate Game with AI</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <Textarea
-                  placeholder="Describe your game... e.g., 'Create a racing game with 4 players, cars, and a circular track'"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  rows={3}
-                />
-                <Button 
-                  onClick={generateAIGame} 
-                  disabled={isGenerating}
-                  className="w-full"
-                >
-                  {isGenerating ? "Generating..." : "Generate Game"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+
+        <TabsContent value="builder" className="m-0">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div />
+            <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
             size="sm"
@@ -383,107 +430,132 @@ const GameBuilder = ({ gameType = "default" }: GameBuilderProps) => {
           <Button 
             variant={isPlaying ? "destructive" : "neon"} 
             size="sm"
-            onClick={() => setIsPlaying(!isPlaying)}
+            onClick={isPlaying ? stopGame : startGame}
           >
             <Play className="h-4 w-4 mr-1" />
             {isPlaying ? "Stop" : "Play"}
           </Button>
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <div className="flex">
-        {/* Toolbar */}
-        <div className="w-16 border-r border-border p-2 flex flex-col gap-1">
-          {tools.map((tool) => (
-            <button
-              key={tool.id}
-              className={cn(
-                "w-full aspect-square rounded-lg flex items-center justify-center transition-all",
-                activeTool === tool.id 
-                  ? "bg-primary text-primary-foreground" 
-                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setActiveTool(tool.id)}
-              title={tool.label}
-            >
-              <tool.icon className="h-5 w-5" />
-            </button>
-          ))}
-          
-          <div className="h-px bg-border my-2" />
-          
-          <button
-            className="w-full aspect-square rounded-lg flex items-center justify-center hover:bg-destructive/20 text-destructive transition-all"
-            onClick={deleteSelected}
-            disabled={!selectedObject}
-            title="Delete Selected"
-          >
-            <Trash2 className="h-5 w-5" />
-          </button>
-        </div>
+          <div className="flex">
+            {/* Toolbar */}
+            <div className="w-16 border-r border-border p-2 flex flex-col gap-1">
+              {tools.map((tool) => (
+                <button
+                  key={tool.id}
+                  className={cn(
+                    "w-full aspect-square rounded-lg flex items-center justify-center transition-all",
+                    activeTool === tool.id 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => setActiveTool(tool.id)}
+                  title={tool.label}
+                >
+                  <tool.icon className="h-5 w-5" />
+                </button>
+              ))}
+              
+              <div className="h-px bg-border my-2" />
+              
+              <button
+                className="w-full aspect-square rounded-lg flex items-center justify-center hover:bg-destructive/20 text-destructive transition-all"
+                onClick={deleteSelected}
+                disabled={!selectedObject}
+                title="Delete Selected"
+              >
+                <Trash2 className="h-5 w-5" />
+              </button>
+            </div>
 
-        {/* Canvas */}
-        <div className="flex-1 p-4">
-          <div
-            className="relative w-full h-[400px] bg-background/50 rounded-xl border-2 border-dashed border-border cursor-crosshair overflow-hidden"
-            onClick={handleCanvasClick}
-          >
-            {objects.length === 0 && !isPlaying && (
-              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                <p>Click to add {gameType === "racing" ? "cars, tracks, and obstacles" : 
-                           gameType === "shooting" ? "platforms, weapons, and spawn points" :
-                           "objects"} to your game</p>
+            {/* Canvas */}
+            <div className="flex-1 p-4">
+              <div
+                className="relative w-full h-[400px] bg-background/50 rounded-xl border-2 border-dashed border-border cursor-crosshair overflow-hidden"
+                onClick={handleCanvasClick}
+              >
+                {objects.length === 0 && !isPlaying && (
+                  <div className="absolute inset-0 p-4">
+                    <MiniGameSelector gameType={gameType === "racing" ? "racing" : gameType === "shooting" ? "shooter" : "snake"} />
+                  </div>
+                )}
+                {objects.map(renderObject)}
+                
+                {isPlaying && (
+                  <>
+                    {/* Player */}
+                    <div 
+                      className="absolute w-12 h-12 bg-blue-500 rounded transition-all duration-75 flex items-center justify-center text-white font-bold"
+                      style={{ left: playerPosition.x, top: playerPosition.y }}
+                    >
+                      🎮
+                    </div>
+                    
+                    {/* Game UI */}
+                    <div className="absolute top-2 left-2 bg-black/50 text-white p-2 rounded text-xs">
+                      <div>Use WASD or Arrow Keys to move</div>
+                      <div>Space to jump (platformer)</div>
+                      <div>Player: ({Math.round(playerPosition.x)}, {Math.round(playerPosition.y)})</div>
+                    </div>
+                    
+                    <div className="absolute top-2 right-2">
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={stopGame}
+                      >
+                        Stop Game
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
-            )}
-            {objects.map(renderObject)}
-            
-            {isPlaying && (
-              <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
-                <div className="text-center">
-                  <Play className="h-12 w-12 text-primary mx-auto mb-2 animate-pulse" />
-                  <p className="text-foreground font-medium">Game Running...</p>
-                  <p className="text-sm text-muted-foreground">Click Stop to edit</p>
+            </div>
+
+            {/* Properties Panel */}
+            <div className="w-48 border-l border-border p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Settings2 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Properties</span>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Palette className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Color</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1">
+                    {colors.map((color) => (
+                      <button
+                        key={color}
+                        className={cn(
+                          "w-8 h-8 rounded-md transition-all",
+                          activeColor === color && "ring-2 ring-white ring-offset-2 ring-offset-background"
+                        )}
+                        style={{ backgroundColor: color }}
+                        onClick={() => setActiveColor(color)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  <p className="mb-1">Objects: {objects.length}</p>
+                  <p>Selected: {selectedObject ? "1" : "None"}</p>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Properties Panel */}
-        <div className="w-48 border-l border-border p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Properties</span>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Palette className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Color</span>
-              </div>
-              <div className="grid grid-cols-4 gap-1">
-                {colors.map((color) => (
-                  <button
-                    key={color}
-                    className={cn(
-                      "w-8 h-8 rounded-md transition-all",
-                      activeColor === color && "ring-2 ring-white ring-offset-2 ring-offset-background"
-                    )}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setActiveColor(color)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              <p className="mb-1">Objects: {objects.length}</p>
-              <p>Selected: {selectedObject ? "1" : "None"}</p>
             </div>
           </div>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="3d-generator" className="m-0">
+          <div className="p-6">
+            <Game3DGeneratorComponent />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

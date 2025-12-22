@@ -1,4 +1,5 @@
 import { Gamepad2, Users, Trophy, Clock, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import StatsCard from "@/components/cards/StatsCard";
 import GameCard from "@/components/cards/GameCard";
 import GameBuilder from "@/components/game-builder/GameBuilder";
@@ -11,9 +12,14 @@ import { apiService } from "@/services/api";
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [showBuilder, setShowBuilder] = useState(false);
   const [recentGames, setRecentGames] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleCreateGame = () => {
+    setShowBuilder(true);
+  };
 
   useEffect(() => {
     if (user) {
@@ -57,25 +63,23 @@ const Dashboard = () => {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Welcome Section */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-gaming font-bold mb-2">
-            Welcome back, <span className="text-gradient">{user.name.split(' ')[0]}</span>
+          <h1 className="text-2xl font-semibold text-white">
+            Welcome back, {user?.name || "Demo"}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-slate-400">
             Ready to explore your gaming world?
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="gaming" size="lg" onClick={() => setShowBuilder(true)}>
-            <Plus className="h-5 w-5 mr-2" />
-            Create Game
-          </Button>
-          <Button variant="outline" size="lg">
-            <Gamepad2 className="h-5 w-5 mr-2" />
-            Quick Match
-          </Button>
-        </div>
+
+        <button
+          onClick={handleCreateGame}
+          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-teal-400 to-sky-500 px-5 py-2 text-sm font-medium text-slate-900 shadow-lg hover:from-teal-300 hover:to-sky-400 transition"
+        >
+          <span className="text-xs">🎮</span>
+          <span>Create Game</span>
+        </button>
       </div>
 
       {/* Stats Grid */}
@@ -87,8 +91,8 @@ const Dashboard = () => {
         />
         <StatsCard
           icon={Users}
-          label="AI Credits"
-          value={user.aiCredits.toString()}
+          label="Friends"
+          value="0"
         />
         <StatsCard
           icon={Trophy}
@@ -149,14 +153,20 @@ const Dashboard = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 border-2 border-dashed border-border rounded-xl">
-            <div className="text-6xl mb-4 opacity-50">🎮</div>
-            <h3 className="text-lg font-semibold mb-2">No games yet</h3>
-            <p className="text-muted-foreground mb-4">Create your first game to get started!</p>
-            <Button variant="gaming" onClick={() => setShowBuilder(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Your First Game
-            </Button>
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-6 flex flex-col items-center justify-center text-center">
+            <div className="mb-3 text-3xl">🎮</div>
+            <h3 className="text-white font-medium mb-1">
+              No games yet
+            </h3>
+            <p className="text-xs text-slate-400 mb-4 max-w-xs">
+              Start creating your first game using our visual game builder.
+            </p>
+            <button
+              onClick={handleCreateGame}
+              className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400 transition"
+            >
+              <span>🎮 Create Game</span>
+            </button>
           </div>
         )}
       </div>

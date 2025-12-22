@@ -6,12 +6,14 @@ import {
   DollarSign, 
   Upload, 
   Users, 
-  Settings
+  Settings,
+  Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: Plus, label: "Create Game", path: "/create" },
   { icon: Library, label: "My Games", path: "/games" },
   { icon: Users, label: "Friends", path: "/friends" },
   { icon: Upload, label: "Publishing", path: "/publishing" },

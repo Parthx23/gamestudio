@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Upload, 
   Rocket,
@@ -16,10 +17,13 @@ import {
   Flag,
   Bomb,
   Crown,
-  Plus
+  Plus,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import GameBuilder from "@/components/game-builder/GameBuilder";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,6 +39,7 @@ interface GameType {
   difficulty: "Easy" | "Medium" | "Hard";
   tags: string[];
   color: string;
+  examplePrompt: string;
 }
 
 const gameTypes: GameType[] = [
@@ -46,7 +51,8 @@ const gameTypes: GameType[] = [
     players: "2-8 Players",
     difficulty: "Medium",
     tags: ["Competitive", "Fast-paced"],
-    color: "from-orange-500 to-red-600"
+    color: "from-orange-500 to-red-600",
+    examplePrompt: "futuristic neon city race track with jumps and tight corners"
   },
   {
     id: "kart-smash",
@@ -56,7 +62,8 @@ const gameTypes: GameType[] = [
     players: "2-12 Players",
     difficulty: "Easy",
     tags: ["Chaos", "Party"],
-    color: "from-purple-500 to-pink-600"
+    color: "from-purple-500 to-pink-600",
+    examplePrompt: "demolition derby arena with explosive barrels and ramps"
   },
   {
     id: "shooting",
@@ -66,7 +73,8 @@ const gameTypes: GameType[] = [
     players: "4-16 Players",
     difficulty: "Hard",
     tags: ["Tactical", "Team-based"],
-    color: "from-red-500 to-orange-600"
+    color: "from-red-500 to-orange-600",
+    examplePrompt: "military base with cover points and sniper towers"
   },
   {
     id: "battle-royale",
@@ -76,7 +84,8 @@ const gameTypes: GameType[] = [
     players: "20-100 Players",
     difficulty: "Hard",
     tags: ["Survival", "Competitive"],
-    color: "from-yellow-500 to-amber-600"
+    color: "from-yellow-500 to-amber-600",
+    examplePrompt: "post-apocalyptic wasteland with scattered loot and safe zones"
   },
   {
     id: "capture-flag",
@@ -86,7 +95,8 @@ const gameTypes: GameType[] = [
     players: "4-12 Players",
     difficulty: "Medium",
     tags: ["Strategy", "Team-based"],
-    color: "from-blue-500 to-cyan-600"
+    color: "from-blue-500 to-cyan-600",
+    examplePrompt: "medieval castle with two bases and strategic chokepoints"
   },
   {
     id: "arena-combat",
@@ -96,7 +106,8 @@ const gameTypes: GameType[] = [
     players: "2-8 Players",
     difficulty: "Hard",
     tags: ["Fighting", "Skill-based"],
-    color: "from-emerald-500 to-teal-600"
+    color: "from-emerald-500 to-teal-600",
+    examplePrompt: "gladiator colosseum with moving platforms and weapon spawns"
   },
   {
     id: "tower-defense",
@@ -106,7 +117,8 @@ const gameTypes: GameType[] = [
     players: "2-4 Players",
     difficulty: "Medium",
     tags: ["Co-op", "Strategy"],
-    color: "from-indigo-500 to-purple-600"
+    color: "from-indigo-500 to-purple-600",
+    examplePrompt: "winding path through forest with tower placement spots"
   },
   {
     id: "party-games",
@@ -116,16 +128,29 @@ const gameTypes: GameType[] = [
     players: "2-8 Players",
     difficulty: "Easy",
     tags: ["Casual", "Fun"],
-    color: "from-pink-500 to-rose-600"
+    color: "from-pink-500 to-rose-600",
+    examplePrompt: "colorful playground with obstacle courses and mini challenges"
   }
 ];
 
 const Publishing = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+
+  const handleStartFromAIPrompt = () => {
+    navigate("/builder?mode=ai");
+  };
+
+  const handleSelectTypeFirst = () => {
+    document.getElementById('game-types-section')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     if (user) {
@@ -150,6 +175,26 @@ const Publishing = () => {
       loadGames();
     } catch (error) {
       toast.error('Failed to publish game');
+    }
+  };
+
+  const generateAIGame = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error('Please enter a game description');
+      return;
+    }
+    
+    setGenerating(true);
+    try {
+      await apiService.generateAIGame(aiPrompt);
+      toast.success('AI game generated successfully!');
+      setAiPrompt('');
+      setShowAIGenerator(false);
+      loadGames();
+    } catch (error) {
+      toast.error('Failed to generate AI game');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -194,30 +239,98 @@ const Publishing = () => {
             Choose your multiplayer game type and start building
           </p>
         </div>
-        <Button 
-          variant="gaming" 
-          onClick={() => setShowBuilder(true)}
-          disabled={!selectedGame}
-        >
-          <Rocket className="h-4 w-4 mr-2" />
-          {selectedGame ? `Build ${gameTypes.find(g => g.id === selectedGame)?.name}` : 'Select Game Type First'}
-        </Button>
+        {(() => {
+          const aiCredits = user?.aiCredits ?? 0;
+          return (
+            <button
+              onClick={handleStartFromAIPrompt}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-400 to-sky-500 px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg hover:from-emerald-300 hover:to-sky-400 transition"
+              title={aiCredits > 0 ? `${aiCredits} AI credits remaining` : "No AI credits left"}
+            >
+              <span className="text-base">+</span>
+              <span>Start from AI prompt</span>
+            </button>
+          );
+        })()}
       </div>
 
-      {/* Multiplayer Badge */}
-      <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/30">
-        <Users className="h-6 w-6 text-primary" />
-        <div>
-          <h3 className="font-gaming font-semibold text-primary">All Games Are Multiplayer</h3>
-          <p className="text-sm text-muted-foreground">
-            Every game type supports real-time multiplayer with friends and global matchmaking
-          </p>
+      {/* AI Generate vs Select Type buttons */}
+      <div className="flex items-center justify-end gap-3 mt-4 mb-6">
+        <button
+          onClick={handleStartFromAIPrompt}
+          className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-1.5 text-sm font-semibold text-slate-900 shadow hover:bg-sky-400 transition"
+        >
+          <span className="text-xs">✨</span>
+          <span>AI Generate</span>
+        </button>
+
+        <button
+          onClick={handleSelectTypeFirst}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-600 px-4 py-1.5 text-sm font-medium text-slate-200 hover:border-sky-500 hover:text-sky-300 transition"
+        >
+          <span className="text-xs">🎮</span>
+          <span>Select game type first</span>
+        </button>
+      </div>
+
+      {/* AI Generator Modal */}
+      {showAIGenerator && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-xl font-gaming font-bold mb-4">AI Game Generator</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Describe your game idea and AI will create it for you!
+            </p>
+            <Textarea
+              placeholder="e.g., A multiplayer space shooter where 4 players fight waves of alien invaders. Players can collect power-ups like laser cannons, shields, and speed boosts. The game has a cyberpunk theme with neon colors and electronic music."
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              className="mb-4"
+              rows={5}
+            />
+            <p className="text-xs text-muted-foreground mb-4">
+              💡 Be specific! Include: game type, number of players, theme, mechanics, and visual style for best results.
+            </p>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowAIGenerator(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="neon" 
+                onClick={generateAIGame}
+                disabled={generating}
+                className="flex-1"
+              >
+                {generating ? 'Generating...' : 'Generate Game'}
+              </Button>
+            </div>
+          </div>
         </div>
-        <Zap className="h-5 w-5 text-primary ml-auto animate-pulse" />
+      )}
+
+      {/* Updated Multiplayer info bar */}
+      <div className="mt-4 rounded-2xl bg-slate-900/60 border border-slate-700 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400">
+            <span className="text-lg">👥</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-100">
+              All games are multiplayer
+            </p>
+            <p className="text-xs text-slate-400">
+              Use <span className="font-medium text-sky-300">AI Generate</span> to auto‑configure maps, rules and player counts for any type below.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Game Types Grid */}
-      <div>
+      <div id="game-types-section">
         <div className="flex items-center gap-2 mb-6">
           <Gamepad2 className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-gaming font-semibold">Choose Your Game Type</h2>
@@ -237,65 +350,46 @@ const Publishing = () => {
                     setTimeout(() => setShowBuilder(true), 100);
                   }
                 }}
-                className={cn(
-                  "group relative p-6 rounded-2xl text-left transition-all duration-300",
-                  "border-2 hover:scale-[1.02]",
-                  isSelected 
-                    ? "border-primary bg-primary/10 shadow-lg shadow-primary/20" 
-                    : "border-border bg-card hover:border-primary/50 hover:bg-card/80"
-                )}
+                className="group flex flex-col justify-between rounded-2xl bg-slate-900/70 border border-slate-800 px-4 py-4 text-left hover:border-sky-500/70 hover:bg-slate-900 transition"
               >
-                {/* Glow effect on selection */}
-                {isSelected && (
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
-                )}
-                
-                {/* Icon with gradient background */}
-                <div className={cn(
-                  "w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-all duration-300",
-                  "bg-gradient-to-br",
-                  game.color,
-                  isSelected && "scale-110"
-                )}>
-                  <Icon className="h-7 w-7 text-white" />
-                </div>
-                
-                {/* Title */}
-                <h3 className="font-gaming font-semibold text-lg mb-2 group-hover:text-primary transition-colors">
-                  {game.name}
-                </h3>
-                
-                {/* Description */}
-                <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                  {game.description}
-                </p>
-                
-                {/* Player count */}
-                <div className="flex items-center gap-2 mb-3">
-                  <Users className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">{game.players}</span>
-                </div>
-                
-                {/* Tags and Difficulty */}
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className={getDifficultyColor(game.difficulty)}>
-                    {game.difficulty}
-                  </Badge>
-                  {game.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                
-                {/* Selection indicator */}
-                {isSelected && (
-                  <div className="absolute top-3 right-3">
-                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                      <Flame className="h-4 w-4 text-primary-foreground" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-xl">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-100">
+                        {game.name}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {game.description}
+                      </p>
                     </div>
                   </div>
-                )}
+                  <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-400">
+                    AI‑ready
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-slate-300">
+                    <span className="text-xs">👥</span>
+                    <span>{game.players}</span>
+                  </span>
+                  {game.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-slate-800 px-2 py-0.5 text-slate-400"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-3 rounded-xl bg-slate-900/80 px-3 py-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition">
+                  <span className="text-sky-300 font-medium mr-1">Try:</span>
+                  "{game.examplePrompt}"
+                </div>
               </button>
             );
           })}
@@ -353,14 +447,20 @@ const Publishing = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 border-2 border-dashed border-border rounded-xl">
-            <div className="text-6xl mb-4 opacity-50">🎮</div>
-            <h3 className="text-lg font-semibold mb-2">No games to publish yet</h3>
-            <p className="text-muted-foreground mb-4">Create your first game to get started!</p>
-            <Button variant="gaming" onClick={() => setShowBuilder(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Your First Game
-            </Button>
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-6 flex flex-col items-center justify-center text-center">
+            <div className="mb-3 text-3xl">🎮</div>
+            <h3 className="text-white font-medium mb-1">
+              No games to publish yet
+            </h3>
+            <p className="text-xs text-slate-400 mb-4 max-w-xs">
+              Kickstart your first 3D world with a single prompt. Describe any idea and let AI build the level.
+            </p>
+            <button
+              onClick={handleStartFromAIPrompt}
+              className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400 transition"
+            >
+              <span>✨ Generate game with AI</span>
+            </button>
           </div>
         )}
       </div>
